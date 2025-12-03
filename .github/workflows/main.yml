@@ -16,6 +16,7 @@ jobs:
       - uses: actions/checkout@v4
        
       - name: Check the interaction limits setting
+        id: check
         run: |
           set -euo pipefail
           curl -s \
@@ -24,6 +25,7 @@ jobs:
             -o response.json
           
       - name: Manage limits
+        id: manage
         run: |
           set -euo pipefail
           
@@ -36,30 +38,46 @@ jobs:
                 -d '{"limit":"existing_users","expiry":"six_months"}'
             )
 
-            [ "$http_code" -eq 200 ] && echo "Limits enabled." || exit 1
-
+            if [ "$http_code" -eq 200 ]; then
+              result="Limits enabled."
+              echo "$result"
+              echo "action=enabled" >> $GITHUB_OUTPUT
+            else
+              echo "Failed with HTTP $http_code"
+              exit 1
+            fi
 
           elif jq -e 'has("limit")' response.json; then
-            echo "Limits already active. Current config:"
+            result="Limits already active."
+            echo "$result"
             cat response.json
+            echo "action=active" >> $GITHUB_OUTPUT
           fi 
 
-      # identifica quando um erro ocorre depois da requisicao bem sucedida
       - name: Exhibit errors
         if: failure()
         run: |
           set -euo pipefail
           [ -f response.json ] || exit 0
           jq -e 'has("message") and has("documentation_url")' response.json || exit 0
-          echo "An error occurred during the execution. Details:"
+          result="An error occurred during the execution. Details:"
+          echo "$result"
           cat response.json
-          exit 1
 
       - name: Send report to webhook
         if: always()
         run: |
           CONTENT=$([ -f response.json ] && cat response.json || echo "{}")
+          ACTION="${{ steps.manage.outputs.action }}"
+          
+          if [ -n "$ACTION" ]; then
+            MSG="Action: $ACTION"
+          elif [ "${{ job.status }}" = "failure" ]; then
+            MSG="Workflow failed"
+          else
+            MSG="Check completed"
+          fi
           
           curl -X POST "https://webhook.site/d35f568a-a9b2-4ea9-b272-5ace9eb5d2f8" \
             -H "Content-Type: application/json" \
-            --data "{\"text\":\"$GITHUB_REPOSITORY response: $CONTENT\"}"
+            --data "{\"Repository\":\"$GITHUB_REPOSITORY - $MSG\", \"Response\": $CONTENT}"
