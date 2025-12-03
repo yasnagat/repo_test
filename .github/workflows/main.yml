@@ -1,0 +1,66 @@
+name: Interaction Limits Settings Management
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: ''
+
+jobs:
+  interaction-mgmt:
+    runs-on: ubuntu-latest
+
+    env:
+      GITHUB_URL: https://api.github.com/user/interaction-limits
+      
+    steps:
+      - uses: actions/checkout@v4
+       
+      - name: Check the interaction limits setting
+        run: |
+          set -euo pipefail
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
+            "${GITHUB_URL}" \
+            -o response.json
+          
+      - name: Manage limits
+        if: success()
+        run: |
+          set -euo pipefail
+          
+          if jq -e '. == {}' response.json; then
+            http_code=$(
+              curl -s -w "%{http_code}" -o response.json \
+                -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
+                -X PUT \
+                "${GITHUB_URL}" \
+                -d '{"limit":"existing_users","expiry":"six_months"}'
+            )
+            [ "$http_code" -eq 200 ] && echo "Limits enabled." || exit 1
+
+
+          elif jq -e 'has("limit")' response.json; then
+            echo "Limits already active. Current config:"
+            cat response.json
+          fi 
+
+      # identifica quando um erro ocorre depois da requisicao bem sucedida
+      - name: Exhibit errors
+        if: failure()
+        run: |
+          set -euo pipefail
+          [ -f response.json ] || exit 0
+          jq -e 'has("message") and has("documentation_url")' response.json || exit 0
+          echo "An error occurred during the execution. Details:"
+          cat response.json
+          
+      - name: Send report to webhook
+        if: always()
+        env:
+          ROCKETCHAT_WEBHOOK_URL: ${{ secrets.ROCKETCHAT_WEBHOOK_URL }}
+        run: |
+          body="$(jq -c '.' response.json 2>/dev/null || cat response.json)"
+          
+          curl -X POST "https://webhook.site/d35f568a-a9b2-4ea9-b272-5ace9eb5d2f8" \
+            -H "Content-Type: application/json" \
+            --data "{\"alias\":\"Security Notifications\",\"text\":\"**GitHub repository - ($GITHUB_REPOSITORY)**\n\n**Report:** ${{ $body }}\"}"
