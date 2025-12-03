@@ -3,7 +3,7 @@ name: Interaction Limits Settings Management
 on:
   workflow_dispatch:
   schedule:
-    - cron: ''
+    - cron: '0 0 * * 0'  
 
 jobs:
   interaction-mgmt:
@@ -56,11 +56,8 @@ jobs:
           
       - name: Send report to webhook
         if: always()
-        env:
-          ROCKETCHAT_WEBHOOK_URL: ${{ secrets.ROCKETCHAT_WEBHOOK_URL }}
         run: |
-          body="$(jq -c '.' response.json 2>/dev/null || cat response.json)"
           
           curl -X POST "https://webhook.site/d35f568a-a9b2-4ea9-b272-5ace9eb5d2f8" \
             -H "Content-Type: application/json" \
-            --data "{\"alias\":\"Security Notifications\",\"text\":\"**GitHub repository - ($GITHUB_REPOSITORY)**\n\n**Report:** ${{ $body }}\"}"
+            --data "{\"alias\":\"Security Notifications\",\"text\":\"**GitHub repository - ($GITHUB_REPOSITORY)**\n\n**Report:** \"}"
