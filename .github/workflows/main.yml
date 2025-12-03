@@ -24,7 +24,6 @@ jobs:
             -o response.json
           
       - name: Manage limits
-        if: success()
         run: |
           set -euo pipefail
           
@@ -36,6 +35,7 @@ jobs:
                 "${GITHUB_URL}" \
                 -d '{"limit":"existing_users","expiry":"six_months"}'
             )
+
             [ "$http_code" -eq 200 ] && echo "Limits enabled." || exit 1
 
 
