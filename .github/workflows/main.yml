@@ -78,6 +78,6 @@ jobs:
             MSG="Check completed"
           fi
 
-          curl -X POST "http://localhost:3000/hooks/6939b73ee0bb71992508c38b/WjvoH8fFnoj5mwkFRvWEbt5mqJ7v53afpJoM8b2HZwLeDQgv" \
+          curl -X POST "https://teeniest-felisha-diuretically.ngrok-free.dev/hooks/6939b73ee0bb71992508c38b/WjvoH8fFnoj5mwkFRvWEbt5mqJ7v53afpJoM8b2HZwLeDQgv" \
           -H 'Content-Type: application/json' \
           --data '{"alias":"Admin","text":"GitHub User Limit Interaction Setting","attachments":[{"Repository\":\"$GITHUB_REPOSITORY - $MSG\", \"Response\": "$CONTENT"}]}' 
