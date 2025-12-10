@@ -3,7 +3,7 @@ name: Interaction Limits Settings Management
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 0'  
+    - cron: '0 5 27 3,7,11 *'  
 
 jobs:
   interaction-mgmt:
@@ -77,7 +77,7 @@ jobs:
           else
             MSG="Check completed"
           fi
-          
-          curl -X POST "https://webhook.site/d35f568a-a9b2-4ea9-b272-5ace9eb5d2f8" \
-            -H "Content-Type: application/json" \
-            --data "{\"Repository\":\"$GITHUB_REPOSITORY - $MSG\", \"Response\": $CONTENT}"
+
+          curl -X POST "http://localhost:3000/hooks/6939b73ee0bb71992508c38b/WjvoH8fFnoj5mwkFRvWEbt5mqJ7v53afpJoM8b2HZwLeDQgv" \
+          -H 'Content-Type: application/json' \
+          --data '{"alias":"Admin","text":"GitHub User Limit Interaction Setting","attachments":[{"Repository\":\"$GITHUB_REPOSITORY - $MSG\", \"Response\": "$CONTENT"}]}' 
