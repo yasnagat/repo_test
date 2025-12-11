@@ -2,8 +2,6 @@ name: Interaction Limits Settings Management
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 5 27 3,7,11 *'  
 
 jobs:
   interaction-mgmt:
@@ -11,24 +9,25 @@ jobs:
 
     env:
       GITHUB_URL: https://api.github.com/user/interaction-limits
-      
+
     steps:
       - uses: actions/checkout@v4
-       
+
       - name: Check the interaction limits setting
         id: check
         run: |
           set -euo pipefail
+          : > report.log          
           curl -s \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
             "${GITHUB_URL}" \
             -o response.json
-          
+
       - name: Manage limits
         id: manage
         run: |
           set -euo pipefail
-          
+
           if jq -e '. == {}' response.json; then
             http_code=$(
               curl -s -w "%{http_code}" -o response.json \
@@ -40,29 +39,33 @@ jobs:
 
             if [ "$http_code" -eq 200 ]; then
               result="Limits enabled."
-              echo "$result"
-              echo "action=enabled" >> $GITHUB_OUTPUT
+              echo "$result" >> report.log
+              cat response.json >> report.log
+              echo "action=enabled" >> "$GITHUB_OUTPUT"
             else
-              echo "Failed with HTTP $http_code"
+              result="Failed with HTTP $http_code"
+              echo "$result" >> report.log
               exit 1
             fi
 
           elif jq -e 'has("limit")' response.json; then
             result="Limits already active."
-            echo "$result"
-            cat response.json
-            echo "action=active" >> $GITHUB_OUTPUT
-          fi 
+            echo "$result" >> report.log
+            cat response.json | tee -a report.log
+            echo "action=active" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Exhibit errors
         if: failure()
         run: |
           set -euo pipefail
+
           [ -f response.json ] || exit 0
           jq -e 'has("message") and has("documentation_url")' response.json || exit 0
+
           result="An error occurred during the execution. Details:"
-          echo "$result"
-          cat response.json
+          echo "$result" >> report.log
+          cat response.json | tee -a report.log
 
       - name: Send report to webhook
         if: always()
@@ -70,21 +73,23 @@ jobs:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: |
           set -euo pipefail
+          
+          LOGS=$(cat report.log 2>/dev/null || echo "No logs collected.")
 
           payload=$(jq -n \
             --arg repo "$GITHUB_REPOSITORY" \
-            --arg result "$(cat response.json)" '
+            --arg logs "$LOGS" '
             {
               alias: "Security Notifications",
-              text: "**GitHub User Limit Interaction Setting - (\($repo))**",
+              text: "**GitHub User Limit Interaction Setting - (\($repo))**\n\n" + $logs,
               attachments: [
                 {
-                  title: "Action Result",
-                  text: $result
+                  title: "GitHub Interaction Limits Report",
+                  text: $logs
                 }
               ]
             }')
 
-          curl -X POST "$WEBHOOK_URL" \
+          curl -X POST "$ROCKETCHAT_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             --data "$payload"
