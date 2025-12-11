@@ -66,6 +66,20 @@ jobs:
         run: |
           set -euo pipefail
 
+          payload=$(jq -n \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg result "$(cat response.json)" '
+            {
+              alias: "Security Notifications",
+              text: "**GitHub User Limit Interaction Setting - (\($repo))**",
+              attachments: [
+                {
+                  title: "Action Result",
+                  text: $result
+                }
+              ]
+            }')
+
           curl -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            --data "{\"alias\":\"Security Notifications\",\"text\":\"**User Limit Interaction - ($GITHUB_REPOSITORY)**\\n\\n${{ steps.manage.outputs.result }}\\n\\n${{ steps.errors.outputs.result }}\"}"
+            --data "$payload"
