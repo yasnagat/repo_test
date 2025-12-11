@@ -67,37 +67,10 @@ jobs:
       - name: Send report to webhook
         if: always()
         env:
-          WEBHOOK_URL: https://teeniest-felisha-diuretically.ngrok-free.dev/hooks/6939b73ee0bb71992508c38b/WjvoH8fFnoj5mwkFRvWEbt5mqJ7v53afpJoM8b2HZwLeDQgv
+          ROCKETCHAT_WEBHOOK_URL: ${{ secrets.ROCKETCHAT_WEBHOOK_URL }}
         run: |
           set -euo pipefail
-
-          # Recupera o resultado da step "manage"
-          ACTION="${{ steps.manage.outputs.action }}"
-
-          # Se por algum motivo não houver output, define um padrão
-          if [ -z "$ACTION" ]; then
-            ACTION="not_set"
-          fi
-
-          # Monta o texto que você quer enviar, mas mantendo a estrutura exigida:
-          # {"alias":"Admin","text":"...","attachments":[{...}]}
-          TEXT="Resultado da automação de Interaction Limits: ${ACTION}"
-
-          # Gera o JSON exatamente com os campos esperados
-          # Estrutura final:
-          # {"alias":"Admin","text":"<TEXT>","attachments":[{}]}
-          payload=$(jq -n --arg alias "Admin" --arg text "$TEXT" '
-            {
-              alias: $alias,
-              text: $text,
-              attachments: [ {} ]
-            }
-          ')
-
-          echo "Payload enviado:"
-          echo "$payload"
-
-          curl -sS -w "\nHTTP_CODE:%{http_code}\n" \
-            -X POST "${WEBHOOK_URL}" \
-            -H 'Content-Type: application/json' \
-            --data "$payload"
+         
+          curl -X POST "$ROCKETCHAT_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            --data "{\"alias\":\"Security Notifications\",\"text\":\"**GitHub User Limit Interaction Setting - ($GITHUB_REPOSITORY)**\n\n**Action Result**\n\n$(cat response.json | sed 's/\"/\\\\\"/g')\"}"
