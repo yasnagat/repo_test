@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
           : > report.log          
           curl -s \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.ERSONAL_TOKEN }}" \
             "${GITHUB_URL}" \
             -o response.json
 
