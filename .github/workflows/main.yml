@@ -99,7 +99,7 @@ jobs:
             --arg logs "$LOGS" '
             {
               alias: "Security Notifications",
-              text: "**GitHub User Limit Interaction Setting - (\($repo))**\n\n" + $logs,
+              text: "**GitHub User Limit Interaction Setting - (\($repo))**\n\n",
               attachments: [
                 {
                   title: "GitHub Interaction Limits Report",
