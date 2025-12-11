@@ -20,7 +20,7 @@ jobs:
 
           curl -s \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
+            -H "Authorization: Bearer ${{ secrets.MY_TOKEN }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             "${GITHUB_URL}" \
             -o response.json
@@ -34,7 +34,7 @@ jobs:
             http_code=$(
               curl -s -w "%{http_code}" -o response.json \
                 -H "Accept: application/vnd.github+json" \
-                -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
+                -H "Authorization: Bearer ${{ secrets.MY_TOKEN }}" \
                 -H "X-GitHub-Api-Version: 2022-11-28" \
                 -X PUT \
                 "${GITHUB_URL}" \
@@ -79,7 +79,7 @@ jobs:
           echo "DEBUG - RESULT_MANAGE: '${RESULT_MANAGE}'"
           echo "DEBUG - RESULT_ERRORS: '${RESULT_ERRORS}'"
 
-          text="**User Limit Interaction - ($GITHUB_REPOSITORY)**"
+          text="**User Limit Interaction**"
 
           if [ -n "${RESULT_MANAGE:-}" ]; then
             text="$text\n\n${RESULT_MANAGE}"
