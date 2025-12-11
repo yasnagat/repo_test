@@ -16,11 +16,20 @@ jobs:
       - name: Check the interaction limits setting
         id: check
         run: |
-          set -euo pipefail  
+          set -euo pipefail
+
+          # zera o arquivo de relatório no início do job
+          : > report.log
+
+          echo "Checking interaction limits setting..." | tee -a report.log
+
           curl -s \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
             "${GITHUB_URL}" \
             -o response.json
+
+          echo "Initial API response:" | tee -a report.log
+          cat response.json | tee -a report.log
 
       - name: Manage limits
         id: manage
@@ -37,18 +46,31 @@ jobs:
             )
 
             if [ "$http_code" -eq 200 ]; then
-              echo "result=Limits enabled now." >> "$GITHUB_OUTPUT"
+              result="Limits enabled."
+              echo "$result"
+              echo "$result" >> report.log
+              echo "HTTP code: $http_code" >> report.log
+              echo "Updated API response:" >> report.log
+              cat response.json >> report.log
+              echo "action=enabled" >> "$GITHUB_OUTPUT"
             else
-              echo "result=Failed with HTTP $http_code" >> "$GITHUB_OUTPUT"
+              result="Failed with HTTP $http_code"
+              echo "$result"
+              echo "$result" >> report.log
+              echo "API response on failure:" >> report.log
+              cat response.json >> report.log
               exit 1
             fi
 
           elif jq -e 'has("limit")' response.json; then
-            echo "result=Limits already active. Expires at: $(jq -r '.expires_at // empty' response.json)" >> "$GITHUB_OUTPUT"
+            result="Limits already active."
+            echo "$result"
+            echo "$result" >> report.log
+            cat response.json | tee -a report.log
+            echo "action=active" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Exhibit errors
-        id: errors
         if: failure()
         run: |
           set -euo pipefail
@@ -56,30 +78,36 @@ jobs:
           [ -f response.json ] || exit 0
           jq -e 'has("message") and has("documentation_url")' response.json || exit 0
 
-          echo "result=An error occurred during the execution. Message: $(jq -r '.message' response.json). Docs: $(jq -r '.documentation_url' response.json)" >> "$GITHUB_OUTPUT"
+          result="An error occurred during the execution. Details:"
+          echo "$result"
+          echo "$result" >> report.log
+          cat response.json | tee -a report.log
 
-          
       - name: Send report to webhook
         if: always()
         env:
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          ROCKETCHAT_WEBHOOK_URL: ${{ secrets.ROCKETCHAT_WEBHOOK_URL }}
         run: |
           set -euo pipefail
 
+          # Lê tudo que foi acumulado no relatório
+          LOGS=$(cat report.log 2>/dev/null || echo "No logs collected.")
+
+          # Monta o JSON simples com alias, text e attachments preenchido
           payload=$(jq -n \
             --arg repo "$GITHUB_REPOSITORY" \
-            --arg result "$(cat response.json)" '
+            --arg logs "$LOGS" '
             {
               alias: "Security Notifications",
-              text: "**GitHub User Limit Interaction Setting - (\($repo))**",
+              text: "**GitHub User Limit Interaction Setting - (\($repo))**\n\n" + $logs,
               attachments: [
                 {
-                  title: "Action Result",
-                  text: $result
+                  title: "GitHub Interaction Limits Report",
+                  text: $logs
                 }
               ]
             }')
 
-          curl -X POST "$WEBHOOK_URL" \
+          curl -X POST "$ROCKETCHAT_WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             --data "$payload"
