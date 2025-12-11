@@ -16,8 +16,7 @@ jobs:
       - name: Check the interaction limits setting
         id: check
         run: |
-          set -euo pipefail
-          : > report.log          
+          set -euo pipefail  
           curl -s \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
             "${GITHUB_URL}" \
@@ -34,25 +33,22 @@ jobs:
                 -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
                 -X PUT \
                 "${GITHUB_URL}" \
-                -d '{"limit":"existing_users","expiry":"months"}'
+                -d '{"limit":"existing_users","expiry":"six_months"}'
             )
 
             if [ "$http_code" -eq 200 ]; then
-              result="Limits enabled."
-              echo "$result" >> report.log
+              echo "result=Limits enabled now." >> "$GITHUB_OUTPUT"
             else
-              result="Failed with HTTP $http_code"
-              echo "$result" >> report.log
+              echo "result=Failed with HTTP $http_code" >> "$GITHUB_OUTPUT"
               exit 1
             fi
 
           elif jq -e 'has("limit")' response.json; then
-            result="Limits already active."
-            echo "$result" >> report.log
-            cat response.json | tee -a report.log
+            echo "result=Limits already active. Expires at: $(jq -r '.expires_at // empty' response.json)" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Exhibit errors
+        id: errors
         if: failure()
         run: |
           set -euo pipefail
@@ -60,24 +56,16 @@ jobs:
           [ -f response.json ] || exit 0
           jq -e 'has("message") and has("documentation_url")' response.json || exit 0
 
-          result="An error occurred during the execution. Details:"
-          echo "$result" >> report.log
-          cat response.json | tee -a report.log
+          echo "result=An error occurred during the execution. Message: $(jq -r '.message' response.json). Docs: $(jq -r '.documentation_url' response.json)" >> "$GITHUB_OUTPUT"
 
+          
       - name: Send report to webhook
         if: always()
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: |
-          set -euo pipefail       
-
-          payload=$(jq -n \
-            --rawfile logs report.log '
-            {
-              alias: "Security Notifications",
-              text: ("**GitHub User Limit Interaction Setting - (" +"$GITHUB_REPOSITORY" + ")**\n\n" + $logs)
-            }')
+          set -euo pipefail
 
           curl -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            --data "$payload"
+            --data "{\"alias\":\"Security Notifications\",\"text\":\"**User Limit Interaction - ($GITHUB_REPOSITORY)**\\n\\n${{ steps.manage.outputs.result }}\\n\\n${{ steps.errors.outputs.result }}\"}"
