@@ -40,7 +40,6 @@ jobs:
             if [ "$http_code" -eq 200 ]; then
               result="Limits enabled."
               echo "$result" >> report.log
-              cat response.json >> report.log
             else
               result="Failed with HTTP $http_code"
               echo "$result" >> report.log
@@ -72,10 +71,23 @@ jobs:
         run: |
           set -euo pipefail       
 
-          LOGS=$(sed 's/"/\\"/g' report.log)
+          if [ ! -f report.log ]; then
+            echo "No logs collected." > report.log
+          fi
 
-          payload="{\"alias\":\"Security Notifications\",\"text\":\"**GitHub User Limit Interaction Setting - ($GITHUB_REPOSITORY)**\n\n$LOGS\"}"
+          # Monta o payload JSON de forma segura
+          payload=$(jq -n \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --rawfile logs report.log '
+            {
+              alias: "Security Notifications",
+              text: ("**GitHub User Limit Interaction Setting - (" + $repo + ")**\n\n" + $logs)
+            }')
 
-          curl -X POST "$WEBHOOK_URL" \
+          echo "Payload a ser enviado:"
+          echo "$payload"
+
+          curl -sS -w "\nHTTP_CODE:%{http_code}\n" \
+            -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             --data "$payload"
