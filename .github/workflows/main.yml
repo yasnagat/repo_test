@@ -67,17 +67,4 @@ jobs:
       - name: Send report to webhook
         if: always()
         run: |
-          CONTENT=$([ -f response.json ] && cat response.json || echo "{}")
-          ACTION="${{ steps.manage.outputs.action }}"
-          
-          if [ -n "$ACTION" ]; then
-            MSG="Action: $ACTION"
-          elif [ "${{ job.status }}" = "failure" ]; then
-            MSG="Workflow failed"
-          else
-            MSG="Check completed"
-          fi
-
-          curl -X POST "http://localhost:3000/hooks/6939b73ee0bb71992508c38b/WjvoH8fFnoj5mwkFRvWEbt5mqJ7v53afpJoM8b2HZwLeDQgv" \
-          -H 'Content-Type: application/json' \
-          --data '{"alias":"Admin","text":"GitHub User Limit Interaction Setting","attachments":[{"Repository\":\"$GITHUB_REPOSITORY - $MSG\", \"Response\": "$CONTENT"}]}' 
+        curl -X POST -H 'Content-Type: application/json' --data '{"alias":"Admin","text":"Example message","attachments":[{"title":"Rocket.Chat","title_link":"https://rocket.chat","text":"Rocket.Chat, the best open source chat","image_url":"https://teeniest-felisha-diuretically.ngrok-free.dev/images/integration-attachment-example.png","color":"#764FA5"}]}' https://teeniest-felisha-diuretically.ngrok-free.dev/hooks/6939b73ee0bb71992508c38b/WjvoH8fFnoj5mwkFRvWEbt5mqJ7v53afpJoM8b2HZwLeDQgv
