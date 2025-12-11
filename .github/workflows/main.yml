@@ -90,6 +90,6 @@ jobs:
               ]
             }')
 
-          curl -X POST "$ROCKETCHAT_WEBHOOK_URL" \
+          curl -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
             --data "$payload"
