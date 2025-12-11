@@ -41,7 +41,6 @@ jobs:
               result="Limits enabled."
               echo "$result" >> report.log
               cat response.json >> report.log
-              echo "action=enabled" >> "$GITHUB_OUTPUT"
             else
               result="Failed with HTTP $http_code"
               echo "$result" >> report.log
@@ -52,7 +51,6 @@ jobs:
             result="Limits already active."
             echo "$result" >> report.log
             cat response.json | tee -a report.log
-            echo "action=active" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Exhibit errors
@@ -72,23 +70,11 @@ jobs:
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: |
-          set -euo pipefail
-          
-          LOGS=$(cat report.log 2>/dev/null || echo "No logs collected.")
+          set -euo pipefail       
 
-          payload=$(jq -n \
-            --arg repo "$GITHUB_REPOSITORY" \
-            --arg logs "$LOGS" '
-            {
-              alias: "Security Notifications",
-              text: "**GitHub User Limit Interaction Setting - (\($repo))**\n\n",
-              attachments: [
-                {
-                  title: "GitHub Interaction Limits Report",
-                  text: $logs
-                }
-              ]
-            }')
+          LOGS=$(sed 's/"/\\"/g' report.log)
+
+          payload="{\"alias\":\"Security Notifications\",\"text\":\"**GitHub User Limit Interaction Setting - ($GITHUB_REPOSITORY)**\n\n$LOGS\"}"
 
           curl -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
