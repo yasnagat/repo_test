@@ -16,11 +16,20 @@ jobs:
       - name: Check the interaction limits setting
         id: check
         run: |
-          set -euo pipefail  
+          set -euo pipefail
+
+          # Inicia o relatório zerado
+          : > report.log
+
+          echo "Checking interaction limits setting..." | tee -a report.log
+
           curl -s \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
             "${GITHUB_URL}" \
             -o response.json
+
+          echo "Initial API response:" | tee -a report.log
+          cat response.json | tee -a report.log
 
       - name: Manage limits
         id: manage
@@ -37,28 +46,40 @@ jobs:
             )
 
             if [ "$http_code" -eq 200 ]; then
-              echo "result=Limits enabled now." >> "$GITHUB_OUTPUT"
+              result="Limits enabled."
+              echo "$result" | tee -a report.log
+              echo "HTTP code: $http_code" | tee -a report.log
+              echo "Updated API response:" | tee -a report.log
+              cat response.json | tee -a report.log
+              echo "action=enabled" >> "$GITHUB_OUTPUT"
             else
-              echo "result=Failed with HTTP $http_code" >> "$GITHUB_OUTPUT"
+              result="Failed with HTTP $http_code"
+              echo "$result" | tee -a report.log
+              echo "API response on failure:" | tee -a report.log
+              cat response.json | tee -a report.log
               exit 1
             fi
 
           elif jq -e 'has("limit")' response.json; then
-            echo "result=Limits already active. Expires at: $(jq -r '.expires_at // empty' response.json)" >> "$GITHUB_OUTPUT"
+            result="Limits already active."
+            echo "$result" | tee -a report.log
+            cat response.json | tee -a report.log
+            echo "action=active" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Exhibit errors
-        id: errors
         if: failure()
         run: |
           set -euo pipefail
 
-          [ -f response.json ] || exit 0
-          jq -e 'has("message") and has("documentation_url")' response.json || exit 0
+          if [ -f response.json ]; then
+            if jq -e 'has("message") and has("documentation_url")' response.json; then
+              result="An error occurred during execution. Details:"
+              echo "$result" | tee -a report.log
+              cat response.json | tee -a report.log
+            fi
+          fi
 
-          echo "result=An error occurred during the execution. Message: $(jq -r '.message' response.json). Docs: $(jq -r '.documentation_url' response.json)" >> "$GITHUB_OUTPUT"
-
-          
       - name: Send report to webhook
         if: always()
         env:
@@ -66,6 +87,10 @@ jobs:
         run: |
           set -euo pipefail
 
+          LOGS=$(sed 's/"/\\"/g' report.log)
+
+          payload="{\"alias\":\"Security Notifications\",\"text\":\"**GitHub User Limit Interaction Setting - ($GITHUB_REPOSITORY)**\n\n$LOGS\"}"
+
           curl -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            --data "{\"alias\":\"Security Notifications\",\"text\":\"**User Limit Interaction - ($GITHUB_REPOSITORY)**\\n\\n${{ steps.manage.outputs.result }}\\n\\n${{ steps.errors.outputs.result }}\"}"
+            --data "$payload"
