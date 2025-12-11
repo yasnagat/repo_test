@@ -85,29 +85,6 @@ jobs:
 
       - name: Send report to webhook
         if: always()
-        env:
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+
         run: |
-          set -euo pipefail
-
-          # Lê tudo que foi acumulado no relatório
-          LOGS=$(cat report.log 2>/dev/null || echo "No logs collected.")
-
-          # Monta o JSON simples com alias, text e attachments preenchido
-          payload=$(jq -n \
-            --arg repo "$GITHUB_REPOSITORY" \
-            --arg logs "$LOGS" '
-            {
-              alias: "Security Notifications",
-              text: "**GitHub User Limit Interaction Setting - (\($repo))**\n\n",
-              attachments: [
-                {
-                  title: "GitHub Interaction Limits Report",
-                  text: $logs
-                }
-              ]
-            }')
-
-          curl -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            --data "$payload"
+          curl -X POST "https://teeniest-felisha-diuretically.ngrok-free.dev/hooks/6939b73ee0bb71992508c38b/WjvoH8fFnoj5mwkFRvWEbt5mqJ7v53afpJoM8b2HZwLeDQgv" -H 'Content-Type: application/json' --data '{"alias":"Admin","text":"Example message","attachments":[{"title":"Rocket.Chat","title_link":"https://rocket.chat","text":"Rocket.Chat, the best open source chat","image_url":"https://teeniest-felisha-diuretically.ngrok-free.dev/images/integration-attachment-example.png","color":"#764FA5"}]}'
