@@ -67,10 +67,10 @@ jobs:
       - name: Send report to webhook
         if: always()
         env:
-          ROCKETCHAT_WEBHOOK_URL: ${{ secrets.ROCKETCHAT_WEBHOOK_URL }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: |
           set -euo pipefail
          
-          curl -X POST "$ROCKETCHAT_WEBHOOK_URL" \
+          curl -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            --data "{\"alias\":\"Security Notifications\",\"text\":\"**GitHub User Limit Interaction Setting - ($GITHUB_REPOSITORY)**\n\n**Action Result**\n\n$(cat response.json | sed 's/\"/\\\\\"/g')\"}"
+            --data "{\"alias\":\"Security Notifications\",\"text\":\"**GitHub User Limit Interaction Setting - ($GITHUB_REPOSITORY)**\n\n**Action Result**\n\n$(cat response.json)\"}"
