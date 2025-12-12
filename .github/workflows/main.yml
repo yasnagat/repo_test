@@ -1,4 +1,4 @@
-name: Interaction Limits Settings Management (main)
+name: Interaction Limits Settings Management (pld refactor)
 
 on:
   workflow_dispatch:
@@ -6,67 +6,60 @@ on:
 jobs:
   interaction-mgmt:
     runs-on: ubuntu-latest
-
     env:
-      GITHUB_URL: https://api.github.com/user/interaction-limits # Org. API endpoint is https://api.github.com/orgs/RocketChat/interaction-limits
+      GITHUB_URL: https://api.github.com/user/interaction-limits
       PERSONAL_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check the interaction limits setting
+      - name: Check interaction limits
         id: check
         run: |
           set -euo pipefail
-          curl -s \
+          code=$(curl -sS -w "%{http_code}" -o response.json \
+            -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${PERSONAL_TOKEN}" \
-            "${GITHUB_URL}" \
-            -o response.json
+            "${GITHUB_URL}")
+          [ "$code" -lt 400 ] || exit 1
 
-            
-      - name: Manage limits      
+      - name: Manage limits
         id: manage
         run: |
           set -euo pipefail
-          if jq -e '. == {}' response.json; then
-            http_code=$(
-              curl -s -w "%{http_code}" -o response.json \
-                -H "Authorization: Bearer ${PERSONAL_TOKEN}" \
-                -X PUT \
-                "${GITHUB_URL}" \
-                -d '{"limit":"existing_users","expiry":"six_months"}'
-            )
-    
-            if [ "$http_code" -eq 200 ]; then
-              echo "result=\"Limits successfully set.\"" >> "$GITHUB_OUTPUT"
-            else
-              echo "result=\"Failed to set limits with HTTP $http_code\"" >> "$GITHUB_OUTPUT"
-              exit 1
-            fi
 
-          elif jq -e 'has("limit")' response.json; then
-            echo "result=Limits already active. 
-            Expires at: $(jq -r '.expires_at // empty' response.json)" >> "$GITHUB_OUTPUT"
+          if jq -e '. == {}' response.json >/dev/null; then
+            code=$(curl -sS -w "%{http_code}" -o response.json \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${PERSONAL_TOKEN}" \
+              -X PUT "${GITHUB_URL}" \
+              -d '{"limit":"existing_users","expiry":"six_months"}')
+            [ "$code" -eq 200 ] && echo "result=Limits enabled now." >> "$GITHUB_OUTPUT" || {
+              echo "result=Failed (HTTP $code): $(jq -r '.message // "unknown error"' response.json)" >> "$GITHUB_OUTPUT"
+              exit 1
+            }
+          elif jq -e 'has("limit")' response.json >/dev/null; then
+            echo "result=Limits already active. Expires at: $(jq -r '.expires_at // empty' response.json)" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=API response: $(jq -r '.message // empty' response.json)" >> "$GITHUB_OUTPUT"
           fi
 
-          
-      - name: Exhibit errors
+      - name: Report errors
         id: errors
         if: failure()
         run: |
           set -euo pipefail
-
           [ -f response.json ] || exit 0
-          jq -e 'has("message") and has("documentation_url")' response.json || exit 0
+          jq -e 'has("message")' response.json >/dev/null || exit 0
+          echo "result=Error: $(jq -r '.message' response.json)" >> "$GITHUB_OUTPUT"
 
-          echo "result=An error occurred during the execution. Details: $(cat response.json)" >> "$GITHUB_OUTPUT"
-          
       - name: Send report to webhook
         if: always()
-
         run: |
-          curl -X POST "$WEBHOOK_URL" \
-            -H "Content-Type: application/json" \
-            --data "{\"alias\":\"Security Notifications\",\"text\":\"**User Limit Interaction - ($GITHUB_REPOSITORY)**\\n
-            \\n${{ steps.manage.outputs.result }}\\n\\n${{ steps.errors.outputs.result }}\"}"
+          set -euo pipefail
+          text="**User Limit Interaction - (${GITHUB_REPOSITORY})**"
+          [ -n "${{ steps.manage.outputs.result }}" ] && text="$text\n\n${{ steps.manage.outputs.result }}"
+          [ -n "${{ steps.errors.outputs.result }}" ] && text="$text\n\n${{ steps.errors.outputs.result }}"
+          jq -n --arg alias "Security Notifications" --arg text "$text" '{alias:$alias,text:$text}' \
+            | curl -sS -w "\nHTTP_CODE:%{http_code}\n" -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" --data @-
