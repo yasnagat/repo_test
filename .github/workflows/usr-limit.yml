@@ -70,24 +70,10 @@ jobs:
         if: always()
         env:
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-          RESULT_MANAGE: ${{ steps.manage.outputs.result }}
-          RESULT_ERRORS: ${{ steps.errors.outputs.result }}
         run: |
-          # sem -u aqui para não quebrar se alguma variável vier vazia
           set -eo pipefail
 
-          echo "DEBUG - RESULT_MANAGE: '${RESULT_MANAGE}'"
-          echo "DEBUG - RESULT_ERRORS: '${RESULT_ERRORS}'"
-
           text="**User Limit Interaction**"
-
-          if [ -n "${RESULT_MANAGE:-}" ]; then
-            text="$text\n\n${RESULT_MANAGE}"
-          fi
-
-          if [ -n "${RESULT_ERRORS:-}" ]; then
-            text="$text\n\n${RESULT_ERRORS}"
-          fi
 
           payload=$(jq -n \
             --arg alias "Security Notifications" \
