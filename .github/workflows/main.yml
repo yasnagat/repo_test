@@ -17,25 +17,16 @@ jobs:
         id: check
         run: |
           set -euo pipefail
-
-          # zera o arquivo de relatório no início do job
-          : > report.log
-
-          echo "Checking interaction limits setting..." | tee -a report.log
-
           curl -s \
             -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
             "${GITHUB_URL}" \
             -o response.json
 
-          echo "Initial API response:" | tee -a report.log
-          cat response.json | tee -a report.log
-
+            
       - name: Manage limits
         id: manage
         run: |
           set -euo pipefail
-
           if jq -e '. == {}' response.json; then
             http_code=$(
               curl -s -w "%{http_code}" -o response.json \
@@ -44,47 +35,48 @@ jobs:
                 "${GITHUB_URL}" \
                 -d '{"limit":"existing_users","expiry":"six_months"}'
             )
-
+            
             if [ "$http_code" -eq 200 ]; then
               result="Limits enabled."
-              echo "$result"
               echo "$result" >> report.log
-              echo "HTTP code: $http_code" >> report.log
-              echo "Updated API response:" >> report.log
-              cat response.json >> report.log
-              echo "action=enabled" >> "$GITHUB_OUTPUT"
             else
               result="Failed with HTTP $http_code"
-              echo "$result"
               echo "$result" >> report.log
-              echo "API response on failure:" >> report.log
-              cat response.json >> report.log
               exit 1
             fi
-
           elif jq -e 'has("limit")' response.json; then
             result="Limits already active."
-            echo "$result"
             echo "$result" >> report.log
-            cat response.json | tee -a report.log
-            echo "action=active" >> "$GITHUB_OUTPUT"
           fi
 
+          
       - name: Exhibit errors
         if: failure()
         run: |
           set -euo pipefail
-
           [ -f response.json ] || exit 0
           jq -e 'has("message") and has("documentation_url")' response.json || exit 0
-
           result="An error occurred during the execution. Details:"
-          echo "$result"
           echo "$result" >> report.log
-          cat response.json | tee -a report.log
 
+          
       - name: Send report to webhook
         if: always()
-
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: |
-          curl -X POST "https://teeniest-felisha-diuretically.ngrok-free.dev/hooks/6939b73ee0bb71992508c38b/WjvoH8fFnoj5mwkFRvWEbt5mqJ7v53afpJoM8b2HZwLeDQgv" -H 'Content-Type: application/json' --data '{"alias":"Admin","text":"Example message","attachments":[{"title":"Rocket.Chat","title_link":"https://rocket.chat","text":"Rocket.Chat, the best open source chat","image_url":"https://teeniest-felisha-diuretically.ngrok-free.dev/images/integration-attachment-example.png","color":"#764FA5"}]}'
+          # Monta o payload JSON de forma segura
+          payload=$(jq -n \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --rawfile logs report.log '
+            {
+              alias: "Security Notifications",
+              text: ("**GitHub User Limit Interaction Setting - (" + $repo + ")**\n\n" + $logs)
+            }')
+          echo "Payload a ser enviado:"
+          echo "$payload"
+          
+          curl -sS -w "\nHTTP_CODE:%{http_code}\n" \
+            -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            --data "$payload"
