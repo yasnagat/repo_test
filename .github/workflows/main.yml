@@ -25,7 +25,7 @@ jobs:
             -o response.json
 
             
-      - name: Manage limits
+      - name: Manage limits      
         id: manage
         run: |
           set -euo pipefail
@@ -37,46 +37,36 @@ jobs:
                 "${GITHUB_URL}" \
                 -d '{"limit":"existing_users","expiry":"six_months"}'
             )
-            
+    
             if [ "$http_code" -eq 200 ]; then
-              result="Limits enabled."
-              echo "$result" >> report.log
+              echo "result=\"Limits successfully set.\"" >> "$GITHUB_OUTPUT"
             else
-              result="Failed with HTTP $http_code"
-              echo "$result" >> report.log
+              echo "result=\"Failed to set limits with HTTP $http_code\"" >> "$GITHUB_OUTPUT"
               exit 1
             fi
+
           elif jq -e 'has("limit")' response.json; then
-            result="Limits already active."
-            echo "$result" >> report.log
+            echo "result=Limits already active. 
+            Expires at: $(jq -r '.expires_at // empty' response.json)" >> "$GITHUB_OUTPUT"
           fi
 
           
       - name: Exhibit errors
+        id: errors
         if: failure()
         run: |
           set -euo pipefail
+
           [ -f response.json ] || exit 0
           jq -e 'has("message") and has("documentation_url")' response.json || exit 0
-          result="An error occurred during the execution. Details:"
-          echo "$result" >> report.log
 
+          echo "result=An error occurred during the execution. Details: $(cat response.json)" >> "$GITHUB_OUTPUT"
           
       - name: Send report to webhook
         if: always()
 
         run: |
-          payload=$(jq -n \
-            --arg repo "$GITHUB_REPOSITORY" \
-            --rawfile logs report.log '
-            {
-              alias: "Security Notifications",
-              text: ("**GitHub User Limit Interaction Setting - (" + $repo + ")**\n\n" + $logs)
-            }')
-          echo "Payload a ser enviado:"
-          echo "$payload"
-          
-          curl -sS -w "\nHTTP_CODE:%{http_code}\n" \
-            -X POST "$WEBHOOK_URL" \
+          curl -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            --data "$payload"
+            --data "{\"alias\":\"Security Notifications\",\"text\":\"**User Limit Interaction - ($GITHUB_REPOSITORY)**\\n
+            \\n${{ steps.manage.outputs.result }}\\n\\n${{ steps.errors.outputs.result }}\"}"
