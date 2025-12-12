@@ -2,8 +2,6 @@ name: Interaction Limits Settings Management
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 0'  
 
 jobs:
   interaction-mgmt:
@@ -11,10 +9,10 @@ jobs:
 
     env:
       GITHUB_URL: https://api.github.com/user/interaction-limits
-      
+
     steps:
       - uses: actions/checkout@v4
-       
+
       - name: Check the interaction limits setting
         id: check
         run: |
@@ -23,12 +21,12 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.PERSONAL_TOKEN }}" \
             "${GITHUB_URL}" \
             -o response.json
-          
+
+            
       - name: Manage limits
         id: manage
         run: |
           set -euo pipefail
-          
           if jq -e '. == {}' response.json; then
             http_code=$(
               curl -s -w "%{http_code}" -o response.json \
@@ -37,23 +35,21 @@ jobs:
                 "${GITHUB_URL}" \
                 -d '{"limit":"existing_users","expiry":"six_months"}'
             )
-
+            
             if [ "$http_code" -eq 200 ]; then
               result="Limits enabled."
-              echo "$result"
-              echo "action=enabled" >> $GITHUB_OUTPUT
+              echo "$result" >> report.log
             else
-              echo "Failed with HTTP $http_code"
+              result="Failed with HTTP $http_code"
+              echo "$result" >> report.log
               exit 1
             fi
-
           elif jq -e 'has("limit")' response.json; then
             result="Limits already active."
-            echo "$result"
-            cat response.json
-            echo "action=active" >> $GITHUB_OUTPUT
-          fi 
+            echo "$result" >> report.log
+          fi
 
+          
       - name: Exhibit errors
         if: failure()
         run: |
@@ -61,23 +57,26 @@ jobs:
           [ -f response.json ] || exit 0
           jq -e 'has("message") and has("documentation_url")' response.json || exit 0
           result="An error occurred during the execution. Details:"
-          echo "$result"
-          cat response.json
+          echo "$result" >> report.log
 
+          
       - name: Send report to webhook
         if: always()
+        env:
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: |
-          CONTENT=$([ -f response.json ] && cat response.json || echo "{}")
-          ACTION="${{ steps.manage.outputs.action }}"
+          # Monta o payload JSON de forma segura
+          payload=$(jq -n \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --rawfile logs report.log '
+            {
+              alias: "Security Notifications",
+              text: ("**GitHub User Limit Interaction Setting - (" + $repo + ")**\n\n" + $logs)
+            }')
+          echo "Payload a ser enviado:"
+          echo "$payload"
           
-          if [ -n "$ACTION" ]; then
-            MSG="Action: $ACTION"
-          elif [ "${{ job.status }}" = "failure" ]; then
-            MSG="Workflow failed"
-          else
-            MSG="Check completed"
-          fi
-          
-          curl -X POST "https://webhook.site/d35f568a-a9b2-4ea9-b272-5ace9eb5d2f8" \
+          curl -sS -w "\nHTTP_CODE:%{http_code}\n" \
+            -X POST "$WEBHOOK_URL" \
             -H "Content-Type: application/json" \
-            --data "{\"Repository\":\"$GITHUB_REPOSITORY - $MSG\", \"Response\": $CONTENT}"
+            --data "$payload"
