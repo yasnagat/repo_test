@@ -8,8 +8,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      GITHUB_URL: https://api.github.com/user/interaction-limits
+      GITHUB_URL: https://api.github.com/user/interaction-limits # Org. API endpoint is https://api.github.com/orgs/RocketChat/interaction-limits
       PERSONAL_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+      WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -63,10 +64,8 @@ jobs:
           
       - name: Send report to webhook
         if: always()
-        env:
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+
         run: |
-          # Monta o payload JSON de forma segura
           payload=$(jq -n \
             --arg repo "$GITHUB_REPOSITORY" \
             --rawfile logs report.log '
